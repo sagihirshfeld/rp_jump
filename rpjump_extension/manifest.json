@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "RP Jump",
+  "version": "1.5",
+  "description": "Jump from ReportPortal test failures directly to the Magna logs.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:9999/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_icon": "icon_alert.png",
+    "default_title": "RP Jump"
+  }
+}
