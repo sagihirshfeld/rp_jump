@@ -64,4 +64,3 @@ rm -rf *.spec.bak 2>/dev/null || true
 echo ""
 echo "Build complete! Executable is in dist/"
 echo "To build for other platforms, run this script on that platform."
-

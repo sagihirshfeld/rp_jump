@@ -32,9 +32,9 @@ The project consists of three components:
 ### Option 1: Using Standalone Executable (Recommended)
 
 1. **Download the executable** for your platform:
-   - macOS: `rpjump-server-macos-*` 
+   - macOS: `rpjump-server-macos-*`
    - Linux: `rpjump-server-linux-*`
-   
+
    Or build it yourself (see [Building from Source](#building-from-source) below).
 
 2. **Make the executable runnable** (if needed):
@@ -46,7 +46,7 @@ The project consists of three components:
    ```bash
    ./rpjump-server-*
    ```
-   
+
    The server will start on `http://localhost:9999/jump`
 
 4. **Install the Chrome Extension**:

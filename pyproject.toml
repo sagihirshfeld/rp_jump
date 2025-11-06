@@ -15,4 +15,3 @@ dependencies = [
 
 [project.scripts]
 rpjump-server = "rpjump_server:main"
-

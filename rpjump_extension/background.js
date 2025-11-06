@@ -9,7 +9,7 @@ function alertInTab(tabId, message) {
 // Send configuration to server when available
 async function sendConfigToServer() {
   const config = await chrome.storage.local.get(['rpApiKey', 'rpBaseUrl', 'rpProject']);
-  
+
   if (config.rpApiKey && config.rpBaseUrl && config.rpProject) {
     try {
       await fetch('http://127.0.0.1:9999/config', {
