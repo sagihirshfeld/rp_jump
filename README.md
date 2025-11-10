@@ -26,6 +26,8 @@ The project is a self-contained Chrome extension:
 
 - Chrome browser
 - ReportPortal API access (API key and base URL)
+  - In ReportPortal: click your avatar/profile (bottom‑left) → Profile → API Keys
+  - The base URL is the root of your instance, e.g. `https://reportportal.example.com`
 - Access to Magna logs server
 - ReportPortal project must be "ocs" (hardcoded)
 
@@ -45,7 +47,7 @@ The project is a self-contained Chrome extension:
    - Select the `rpjump_extension/` directory
 
 3. **Configure RP Jump**:
-   - Right-click the RP Jump extension icon and select **Options**
+   - Click the ellipsis icon next to the RP Jump extension and select **Options**
    - Enter your ReportPortal API key and base URL
    - Click **Save Configuration**
 
@@ -88,33 +90,10 @@ Configuration is managed through the Chrome extension options page:
 
 The configuration is saved locally in Chrome's extension storage and persists across browser sessions.
 
-## Troubleshooting
-
-### "Configuration missing" error
-
-- Open the extension options page and verify all fields are filled in
-- Ensure the configuration was saved successfully
-- Try reloading the extension after saving configuration
-
-### "Not a ReportPortal test log URL"
-
-- Make sure you're on a ReportPortal page with a URL containing `/launches/`
-- The URL format should be: `.../launches/<launch_id>/<item_id>/log`
-
 ### "No failed_testcase directories found"
 
 - The test may not have failed, or logs may not be available on Magna yet
 - Verify the Magna logs server is accessible
-
-## Development
-
-The extension is written in JavaScript and runs entirely in the browser.
-
-To modify the extension:
-
-1. Edit files in `rpjump_extension/`
-2. Reload the extension in Chrome (`chrome://extensions/` → click reload)
-3. Test your changes
 
 ## Security Notes
 
