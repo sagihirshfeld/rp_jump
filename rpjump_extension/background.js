@@ -27,6 +27,12 @@ async function processRpJump(url) {
   return await main(url, config.rpApiKey, config.rpBaseUrl);
 }
 
+/**
+ * Add a must-gather sub-path to the list of favorites in the context menu.
+ * @param {string} url - The URL of the must-gather sub-path to add to favorites.
+ * @param {number} tabId - The ID of the tab to add the favorite to.
+ * @returns {Promise<void>} - A promise that resolves when the favorite is added.
+ */
 async function addFavorite(url, tabId) {
   // Validate URL structure first
   const sub_parts = url.split('/');
@@ -69,6 +75,12 @@ async function addFavorite(url, tabId) {
   await chrome.storage.local.set({ favorites });
 }
 
+/**
+ * Handle an error by logging it and alerting the user in the tab.
+ * @param {Error} error - The error to handle.
+ * @param {Object} tab - The tab to alert the user in.
+ * @returns {Promise<void>} - A promise that resolves when the error is handled.
+ */
 async function handleError(error, tab) {
   if (error instanceof UsageError || error instanceof UnexpectedStructureError) {
     console.warn('RP Jump error:', error);
@@ -78,6 +90,10 @@ async function handleError(error, tab) {
   alertInTab(tab.id, `❌ RP Jump failed:\n${error.message}`);
 }
 
+/**
+ * Rebuild the context menu.
+ * @returns {Promise<void>} - A promise that resolves when the context menu is rebuilt.
+ */
 async function rebuildContextMenu() {
   chrome.contextMenus.removeAll(async () => {
     // Create context menu
