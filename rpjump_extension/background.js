@@ -167,7 +167,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 
     // Are we in a must-gather sub-path?
-    const isMustGatherSubPath = info.linkUrl?.includes('must-gather');
+    const isMustGatherSubPath = pageUrl?.includes('must-gather');
 
     // Open favorite
     if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('rpjump-favorite-')) {
@@ -194,8 +194,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       }
     }
 
-    chrome.tabs.create({ url: targetUrl });
-    return;
+    if (isMustGatherSubPath) {
+      // Change the current tab to the target URL
+      chrome.tabs.update(tab.id, { url: targetUrl });
+    } else {
+      chrome.tabs.create({ url: targetUrl });
+    }
   } catch (error) {
     handleError(error, tab);
   }
