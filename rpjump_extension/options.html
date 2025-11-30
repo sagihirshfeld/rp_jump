@@ -75,6 +75,51 @@
       color: #721c24;
       border: 1px solid #f5c6cb;
     }
+    .favorites-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .favorite-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+    }
+    .favorite-item:last-child {
+      border-bottom: none;
+    }
+    .favorite-info {
+      flex-grow: 1;
+      min-width: 0;
+      margin-right: 15px;
+    }
+    .favorite-title {
+      font-weight: 500;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+    .favorite-path {
+      font-size: 12px;
+      color: #777;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .delete-btn {
+      background: #dc3545;
+      color: white;
+      padding: 6px 12px;
+      font-size: 12px;
+      margin-left: 10px;
+    }
+    .delete-btn:hover {
+      background: #c82333;
+    }
   </style>
 </head>
 <body>
@@ -97,6 +142,14 @@
     </form>
 
     <div id="status" class="status"></div>
+
+    <hr style="margin: 30px 0; border: 0; border-top: 1px solid #ddd;">
+
+    <h2>Favorites</h2>
+    <ul id="favoritesList" class="favorites-list">
+      <!-- Favorites will be loaded here -->
+    </ul>
+    <div id="noFavorites" class="help-text" style="display: none;">No favorites added yet. Right-click on a page to add one!</div>
   </div>
 
   <script src="options.js"></script>

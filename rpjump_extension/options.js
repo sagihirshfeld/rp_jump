@@ -8,7 +8,70 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (config.rpBaseUrl) {
     document.getElementById('baseUrl').value = config.rpBaseUrl;
   }
+
+  loadFavorites();
 });
+
+async function loadFavorites() {
+  const { favorites = {} } = await chrome.storage.local.get(['favorites']);
+  const list = document.getElementById('favoritesList');
+  const noFavorites = document.getElementById('noFavorites');
+
+  list.innerHTML = '';
+  const titles = Object.keys(favorites);
+
+  if (titles.length === 0) {
+    noFavorites.style.display = 'block';
+    return;
+  }
+
+  noFavorites.style.display = 'none';
+
+  titles.sort().forEach(title => {
+    const li = document.createElement('li');
+    li.className = 'favorite-item';
+
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'favorite-info';
+
+    const titleSpan = document.createElement('div');
+    titleSpan.className = 'favorite-title';
+    titleSpan.textContent = title || '<Untitled>';
+    if (!title) {
+      titleSpan.style.color = '#999';
+      titleSpan.style.fontStyle = 'italic';
+    }
+
+    const pathSpan = document.createElement('div');
+    pathSpan.className = 'favorite-path';
+    pathSpan.textContent = favorites[title];
+
+    infoDiv.appendChild(titleSpan);
+    infoDiv.appendChild(pathSpan);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = () => deleteFavorite(title);
+
+    li.appendChild(infoDiv);
+    li.appendChild(deleteBtn);
+    list.appendChild(li);
+  });
+}
+
+async function deleteFavorite(title) {
+  if (!confirm(`Are you sure you want to delete favorite "${title}"?`)) {
+    return;
+  }
+
+  const { favorites = {} } = await chrome.storage.local.get(['favorites']);
+  delete favorites[title];
+  await chrome.storage.local.set({ favorites });
+
+  showStatus(`Deleted favorite "${title}"`, 'success');
+  loadFavorites();
+}
 
 // Handle form submission
 document.getElementById('configForm').addEventListener('submit', async e => {
