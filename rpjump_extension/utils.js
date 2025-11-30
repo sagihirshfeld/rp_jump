@@ -31,8 +31,8 @@ export function customQuote(str, safe = '') {
 export function extractIds(uiUrl) {
   if (!['launches/', 'log'].every(p => uiUrl.includes(p))) {
     throw new UsageError(
-      'Invalid ReportPortal URL format.\n' +
-        'RP Jump only works on failed test pages of ReportPortal.\n'
+      'Invalid URL format.\n' +
+        'RP Jump works on ReportPortal test pages OR Magna must-gather log directories.\n'
     );
   }
   const parts = uiUrl.split('launches/')[1].split('/');

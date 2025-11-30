@@ -58,12 +58,24 @@ That's it! No server setup required. The extension works entirely in the browser
 1. **Navigate to a ReportPortal test log page** in Chrome
    - The URL should contain `/launches/` (e.g., `.../launches/<launch_id>/<item_id>/log`)
 
-2. **Click the RP Jump extension icon** in Chrome's toolbar, or:
-   - Right-click on the page and select **"RP Jump 🔗"** from the context menu
+2. **Right-click on the page** (or on a specific link) and open the **"RP Jump 🔗"** menu:
+   - **RP Jump 🔗**: The main item. Clicks here will perform the standard jump to the logs root.
+   - **must-gather root 📂**: Jump specifically to the root of the `must-gather` logs directory.
+   - **Favorites ⭐**: A submenu for your saved log locations.
+     - **<Your Saved Favorites>**: Click any saved favorite to jump directly to that sub-path within the current logs.
+   - **Add to favorites! 💫**: Save the current sub-path (relative to the must-gather root) as a favorite. You will be prompted to name it.
 
 3. The extension will:
-   - ✅ **Success**: Open the Magna logs directory in a new tab
+   - ✅ **Success**: Open the corresponding Magna logs directory (in a new tab, or update current tab if already in logs)
    - ❌ **Error**: Show an alert with the error message
+
+### Favorites Feature
+
+RP Jump allows you to save frequently accessed log sub-directories (e.g., specific pod logs, namespace events) as "Favorites".
+
+- **Adding**: Navigate to a sub-directory in the logs (e.g., inside `must-gather`), right-click, and select **Add to favorites!**. You can give it a custom name.
+- **Using**: On any future test failure page (or while browsing other logs), select your favorite from the menu. RP Jump will find the logs root for the _current_ test run and append your favorite's sub-path.
+- **Managing**: You can view and delete saved favorites from the extension's **Options** page.
 
 ## How It Works
 
@@ -87,6 +99,10 @@ Configuration is managed through the Chrome extension options page:
    - **ReportPortal Base URL**: Base URL of your ReportPortal instance (e.g., `https://reportportal.example.com`)
 
    **Note**: The extension uses the "ocs" project (hardcoded).
+
+4. **Manage Favorites**:
+   - The options page also lists all your saved favorites.
+   - Click **Delete** next to any favorite to remove it.
 
 The configuration is saved locally in Chrome's extension storage and persists across browser sessions.
 

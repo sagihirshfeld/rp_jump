@@ -16,7 +16,7 @@ import { UsageError, UnexpectedStructureError } from './errors.js';
 async function main(url, apiKey, baseUrl) {
   // Validate configuration
   if (!apiKey || !baseUrl) {
-    throw new Error('Missing configuration. Please set RP_API_KEY and RP_BASE_URL');
+    throw new UsageError('Missing configuration. Please set RP_API_KEY and RP_BASE_URL');
   }
 
   // Clean base URL
@@ -45,8 +45,8 @@ async function main(url, apiKey, baseUrl) {
     clusterName = logsUrlRoot.split('openshift-clusters/')[1].split('/')[0];
     testName = itemJson.name;
   } catch (error) {
-    throw new UsageError(
-      'Could not extract Magna logs location from RP ' + '(missing description or name).'
+    throw new UnexpectedStructureError(
+      'Could not extract Magna logs location from RP. (missing description or name).'
     );
   }
 
