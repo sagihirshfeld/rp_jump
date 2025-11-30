@@ -139,12 +139,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Handle click on the RP Jump context menu item
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
+    // Add to favorites
     if (info.menuItemId === 'rpjump-add-favorite') {
       const pageUrl = info.linkUrl || tab.url;
       await addFavorite(pageUrl, tab.id);
       return;
     }
 
+    // Open favorite
     if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('rpjump-favorite-')) {
       const favTitle = info.menuItemId.replace('rpjump-favorite-', '');
       const { favorites = {} } = await chrome.storage.local.get(['favorites']);
@@ -159,30 +161,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       return;
     }
 
+    // Open must-gather root
     if (info.menuItemId === 'rpjump-root') {
       const url = info.linkUrl || tab.url;
       const finalUrl = await processRpJump(url);
       chrome.tabs.create({ url: finalUrl });
       return;
     }
-
-    // Default: top-level menu click
-    {
-      const url = info.linkUrl || tab.url;
-      const finalUrl = await processRpJump(url);
-      chrome.tabs.create({ url: finalUrl });
-    }
-  } catch (error) {
-    handleError(error, tab);
-  }
-});
-
-// Handle click on the RP Jump extension icon click
-chrome.action.onClicked.addListener(async tab => {
-  try {
-    const finalUrl = await processRpJump(tab.url);
-    console.log('RP Jump → Opening:', finalUrl);
-    chrome.tabs.create({ url: finalUrl });
   } catch (error) {
     handleError(error, tab);
   }
