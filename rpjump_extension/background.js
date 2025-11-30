@@ -1,6 +1,7 @@
 // Import report_portal functions
 import { main } from './report_portal.js';
 import { UsageError, UnexpectedStructureError } from './errors.js';
+import { getMustGatherRootUrl } from './utils.js';
 
 function alertInTab(tabId, message) {
   chrome.scripting.executeScript({
@@ -155,12 +156,18 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Handle click on the RP Jump context menu item
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
+    const pageUrl = info.linkUrl || tab.url;
+    let targetUrl;
+
     // Add to favorites
     if (info.menuItemId === 'rpjump-add-favorite') {
       const pageUrl = info.linkUrl || tab.url;
       await addFavorite(pageUrl, tab.id);
       return;
     }
+
+    // Are we in a must-gather sub-path?
+    const isMustGatherSubPath = info.linkUrl?.includes('must-gather');
 
     // Open favorite
     if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('rpjump-favorite-')) {
@@ -171,19 +178,24 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         console.warn('Favorite not found:', favTitle);
         return;
       }
-      const baseUrl = info.linkUrl || tab.url;
-      const finalUrl = (await processRpJump(baseUrl)) + '/' + relativePathSuffix;
-      chrome.tabs.create({ url: finalUrl });
-      return;
+      if (isMustGatherSubPath) {
+        targetUrl = getMustGatherRootUrl(pageUrl) + '/' + relativePathSuffix;
+      } else {
+        targetUrl = (await processRpJump(pageUrl)) + '/' + relativePathSuffix;
+      }
     }
 
     // Open must-gather root
     if (info.menuItemId === 'rpjump-root') {
-      const url = info.linkUrl || tab.url;
-      const finalUrl = await processRpJump(url);
-      chrome.tabs.create({ url: finalUrl });
-      return;
+      if (isMustGatherSubPath) {
+        targetUrl = getMustGatherRootUrl(pageUrl);
+      } else {
+        targetUrl = await processRpJump(pageUrl);
+      }
     }
+
+    chrome.tabs.create({ url: targetUrl });
+    return;
   } catch (error) {
     handleError(error, tab);
   }

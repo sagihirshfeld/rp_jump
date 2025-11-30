@@ -95,3 +95,20 @@ export async function fetchUrlLines(url, apiKey = '') {
   // Split by newlines and filter out empty lines
   return text.split('\n').filter(line => line.trim().length > 0);
 }
+
+/**
+ * Get the must-gather root URL of a must-gather sub-path.
+ * @param {string} url - The URL of the must-gather sub-path.
+ * @returns {string} The root URL of the must-gather sub-path.
+ */
+export function getMustGatherRootUrl(url) {
+  const sub_parts = url.split('/');
+  const root = sub_parts.find(part => part.includes('quay') || part.includes('registry'));
+  if (!root) {
+    throw new UnexpectedStructureError(
+      'No quay*/registry* directory found in must-gather sub-path!'
+    );
+  }
+  const index = sub_parts.indexOf(root);
+  return sub_parts.slice(0, index + 1).join('/');
+}
