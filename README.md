@@ -102,6 +102,9 @@ Configuration is managed through the Chrome extension options page:
 
 4. **Manage Favorites**:
    - The options page also lists all your saved favorites.
+   - Click **Rename** to rename a favorite.
+   - Drag and drop using the handle to reorder favorites.
+   - Use **Export/Import** to back up or restore favorites (JSON).
    - Click **Delete** next to any favorite to remove it.
 
 The configuration is saved locally in Chrome's extension storage and persists across browser sessions.

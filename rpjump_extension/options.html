@@ -82,8 +82,8 @@
     }
     .favorite-item {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      gap: 10px;
       padding: 10px;
       border-bottom: 1px solid #eee;
     }
@@ -110,15 +110,71 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .favorites-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .toolbar-btn {
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      background: #6c757d;
+    }
+    .toolbar-btn:hover {
+      background: #5a6268;
+    }
+    .favorite-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    .action-btn {
+      color: white;
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      line-height: 1.2;
+    }
     .delete-btn {
       background: #dc3545;
-      color: white;
-      padding: 6px 12px;
-      font-size: 12px;
-      margin-left: 10px;
     }
     .delete-btn:hover {
       background: #c82333;
+    }
+    .edit-btn {
+      background: #007bff;
+    }
+    .edit-btn:hover {
+      background: #0069d9;
+    }
+    .drag-handle {
+      cursor: grab;
+      margin-right: 5px;
+      color: #ccc;
+      font-size: 18px;
+      line-height: 1;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .drag-handle:hover {
+      color: #999;
+    }
+    .favorite-item.dragging {
+      opacity: 0.5;
+      background: #f8f9fa;
+      border: 1px dashed #ccc;
+    }
+    .favorite-item.drag-over {
+      border-top: 2px solid #4CAF50;
     }
   </style>
 </head>
@@ -150,8 +206,13 @@
       <!-- Favorites will be loaded here -->
     </ul>
     <div id="noFavorites" class="help-text" style="display: none;">No favorites added yet. Right-click on a page to add one!</div>
+    <div class="favorites-toolbar">
+      <button type="button" id="exportFavoritesBtn" class="toolbar-btn">Export</button>
+      <button type="button" id="importFavoritesBtn" class="toolbar-btn">Import</button>
+      <input type="file" id="importFavoritesFile" accept="application/json,.json" style="display:none" />
+    </div>
   </div>
 
-  <script src="options.js"></script>
+  <script type="module" src="options.js"></script>
 </body>
 </html>
