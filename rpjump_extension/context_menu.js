@@ -32,6 +32,13 @@ export async function rebuildContextMenu() {
       contexts: ['page', 'link', 'selection'],
     });
 
+    chrome.contextMenus.create({
+      id: 'rpjump-browse-local',
+      parentId: 'rpjump',
+      title: 'Browse Local Directory 📁',
+      contexts: ['page', 'link', 'selection'],
+    });
+
     const titles = await getOrderedFavoriteTitles();
     for (const title of titles) {
       if (!title) continue;

@@ -9,6 +9,11 @@ import {
   setFavoritesAndOrder,
 } from './favorites.js';
 
+// IndexedDB for storing directory handle
+const DB_NAME = 'DirectoryBrowserDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'handles';
+
 // Load saved configuration
 document.addEventListener('DOMContentLoaded', async () => {
   const config = await chrome.storage.local.get(['rpApiKey', 'rpBaseUrl']);
@@ -21,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   loadFavorites();
+  await loadBrowseDirectoryConfig();
 
   // Import / Export
   const exportBtn = document.getElementById('exportFavoritesBtn');
@@ -31,6 +37,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (importBtn && importFile) {
     importBtn.addEventListener('click', () => importFile.click());
     importFile.addEventListener('change', () => onImportFavorites(importFile));
+  }
+
+  // Browse Directory Configuration
+  const selectBrowseDirBtn = document.getElementById('selectBrowseDirBtn');
+  if (selectBrowseDirBtn) {
+    selectBrowseDirBtn.addEventListener('click', onSelectBrowseDirectory);
   }
 });
 
@@ -319,5 +331,153 @@ function showStatus(message, type) {
     setTimeout(() => {
       statusDiv.style.display = 'none';
     }, 3000);
+  }
+}
+
+function showBrowseDirStatus(message, type) {
+  const statusDiv = document.getElementById('browseDirStatus');
+  statusDiv.textContent = message;
+  statusDiv.className = `status ${type}`;
+  statusDiv.style.display = 'block';
+
+  if (type === 'success') {
+    setTimeout(() => {
+      statusDiv.style.display = 'none';
+    }, 3000);
+  }
+}
+
+/**
+ * Open IndexedDB
+ */
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+
+    request.onupgradeneeded = event => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+  });
+}
+
+/**
+ * Store directory handle in IndexedDB
+ */
+async function storeDirectoryHandle(handle) {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+
+    // Wrap the put request in a promise
+    await new Promise((resolve, reject) => {
+      const request = store.put(handle, 'rootDirectory');
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+
+    // Wait for transaction to complete
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (error) {
+    console.warn('Failed to store directory handle:', error);
+    throw error;
+  }
+}
+
+/**
+ * Retrieve directory handle from IndexedDB
+ */
+async function getStoredDirectoryHandle() {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+
+    // Wrap the get request in a promise
+    const handle = await new Promise((resolve, reject) => {
+      const request = store.get('rootDirectory');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    if (handle) {
+      // Verify we still have permission
+      const permission = await handle.queryPermission({ mode: 'read' });
+      if (permission === 'granted') {
+        return handle;
+      }
+    }
+  } catch (error) {
+    console.warn('Could not retrieve stored handle:', error);
+  }
+  return null;
+}
+
+/**
+ * Load and display current browse directory configuration
+ */
+async function loadBrowseDirectoryConfig() {
+  const pathSpan = document.getElementById('browseDirPath');
+
+  try {
+    const handle = await getStoredDirectoryHandle();
+    if (handle) {
+      pathSpan.textContent = `/${handle.name}`;
+      pathSpan.style.color = '#155724';
+      pathSpan.style.fontWeight = '500';
+    } else {
+      pathSpan.textContent = 'Not configured';
+      pathSpan.style.color = '#856404';
+      pathSpan.style.fontStyle = 'italic';
+    }
+  } catch (error) {
+    pathSpan.textContent = 'Error loading configuration';
+    pathSpan.style.color = '#721c24';
+    console.error('Failed to load browse directory config:', error);
+  }
+}
+
+/**
+ * Handle browse directory selection
+ */
+async function onSelectBrowseDirectory() {
+  try {
+    // Check if File System Access API is supported
+    if (!window.showDirectoryPicker) {
+      showBrowseDirStatus(
+        'File System Access API not supported in this browser. Please use Chrome or Edge.',
+        'error'
+      );
+      return;
+    }
+
+    // Request directory access
+    const dirHandle = await window.showDirectoryPicker({
+      mode: 'read',
+    });
+
+    // Store the handle in IndexedDB
+    await storeDirectoryHandle(dirHandle);
+
+    // Update the display
+    await loadBrowseDirectoryConfig();
+
+    showBrowseDirStatus(`Directory configured successfully: /${dirHandle.name}`, 'success');
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      // User cancelled the picker
+      return;
+    }
+    showBrowseDirStatus(`Failed to configure directory: ${error.message}`, 'error');
+    console.error('Failed to select browse directory:', error);
   }
 }

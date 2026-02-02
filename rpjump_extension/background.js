@@ -63,6 +63,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const pageUrl = info.linkUrl || tab.url;
     let targetUrl;
 
+    if (info.menuItemId === 'rpjump-browse-local') {
+      // Open the directory browser page
+      chrome.tabs.create({ url: chrome.runtime.getURL('directory_browser.html') });
+      return;
+    }
+
     if (info.menuItemId === 'rpjump-add-favorite') {
       await addFavoriteFromUrl(pageUrl, tab.id);
       return;

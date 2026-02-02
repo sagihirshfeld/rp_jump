@@ -64,6 +64,7 @@ That's it! No server setup required. The extension works entirely in the browser
    - **Favorites ⭐**: A submenu for your saved log locations.
      - **<Your Saved Favorites>**: Click any saved favorite to jump directly to that sub-path within the current logs.
    - **Add to favorites! 💫**: Save the current sub-path (relative to the must-gather root) as a favorite. You will be prompted to name it.
+   - **Browse Local Directory 📁**: Browse local filesystem directories in Apache autoindex style (see below).
 
 3. The extension will:
    - ✅ **Success**: Open the corresponding Magna logs directory (in a new tab, or update current tab if already in logs)
@@ -76,6 +77,34 @@ RP Jump allows you to save frequently accessed log sub-directories (e.g., specif
 - **Adding**: Navigate to a sub-directory in the logs (e.g., inside `must-gather`), right-click, and select **Add to favorites!**. You can give it a custom name.
 - **Using**: On any future test failure page (or while browsing other logs), select your favorite from the menu. RP Jump will find the logs root for the _current_ test run and append your favorite's sub-path.
 - **Managing**: You can view and delete saved favorites from the extension's **Options** page.
+
+### Local Directory Browser
+
+RP Jump includes a built-in local directory browser that displays your filesystem in Apache autoindex style, perfect for browsing local log archives or tarballs that have been extracted locally.
+
+**How to use:**
+
+1. Right-click anywhere and select **Browse Local Directory 📁** from the RP Jump menu
+2. A new tab opens with a "Pick Directory" button
+3. Click the button to select a local directory using your browser's file picker
+4. Browse the directory contents in familiar Apache autoindex style
+
+**Features:**
+
+- **No server required**: Uses the browser's File System Access API
+- **Apache-style listing**: Displays files and folders just like the remote Magna logs
+- **Full navigation**: Click folders to navigate into subdirectories, use "Parent Directory" to go back
+- **Browser back/forward support**: Use browser back/forward buttons to navigate through directory history and return from file views
+- **Breadcrumb navigation**: Click any part of the path to jump to that level
+- **File viewing**: Click files to open them in the same tab (text files, logs, images, etc. display in browser; use back button to return to directory)
+- **Sorting**: Directories listed first, then files, all alphabetically sorted
+- **Metadata display**: Shows file sizes and last modified dates
+
+**Use cases:**
+
+- Browse extracted tarball contents locally before they're uploaded
+- Navigate local log archives in the same familiar interface
+- Prepare for the transition to tarball-based log storage
 
 ## How It Works
 
