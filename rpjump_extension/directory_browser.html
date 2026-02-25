@@ -172,7 +172,7 @@
       padding: 30px;
       border-radius: 8px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      max-width: 500px;
+      max-width: 600px;
       width: 90%;
     }
 
@@ -317,10 +317,10 @@
   <div id="tarballPrompt" class="modal">
     <div class="modal-content">
       <h3>Browse Local Directory</h3>
-      <p>Enter tarball name to extract (optional):</p>
-      <input type="text" id="tarballNameInput" placeholder="e.g., logs-2024.tar.gz" autocomplete="off">
+      <p>Enter tarball name or paste a URL (optional):</p>
+      <input type="text" id="tarballNameInput" placeholder="e.g., logs-2024.tar.gz or https://example.com/archive.tar.gz" autocomplete="off">
       <div class="help-text">
-        Leave empty to browse directory normally. Supports .tar, .tar.gz, and .tgz formats.
+        Paste a URL to download and extract a remote tarball, enter a filename to extract a local tarball, or leave empty to browse the directory normally. Supports .tar, .tar.gz, and .tgz formats.
       </div>
       <div class="button-group">
         <button id="cancelPromptBtn">Cancel</button>
@@ -343,9 +343,10 @@
   <div id="errorContainer"></div>
 
   <!-- External Libraries for Tarball Extraction -->
-  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.1/umd/index.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/js-untar@2.0.0/build/dist/untar.js"></script>
+  <script src="pako.min.js"></script>
+  <script src="untar.min.js"></script>
 
-  <script type="module" src="directory_browser.js"></script>
+  <!-- Main script -->
+  <script src="directory_browser.js"></script>
 </body>
 </html>

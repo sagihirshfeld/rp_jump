@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RP Jump",
-  "version": "1.5",
+  "version": "1.6",
   "description": "Jump from ReportPortal test failures directly to the Magna logs.",
   "permissions": ["activeTab", "scripting", "contextMenus", "storage"],
   "host_permissions": ["<all_urls>"],
@@ -13,5 +13,8 @@
     "default_icon": "icon_alert.png",
     "default_title": "RP Jump"
   },
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
 }
