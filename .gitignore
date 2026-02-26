@@ -13,6 +13,7 @@ dist/
 build/
 *.min.js
 *.min.js.map
+!rpjump_extension/vendor/*.min.js
 
 # Cache directories
 .cache/

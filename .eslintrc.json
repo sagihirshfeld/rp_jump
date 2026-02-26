@@ -1,4 +1,5 @@
 {
+  "ignorePatterns": ["rpjump_extension/vendor/"],
   "env": {
     "browser": true,
     "es2021": true,

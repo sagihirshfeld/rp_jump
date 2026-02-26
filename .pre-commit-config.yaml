@@ -18,7 +18,7 @@ repos:
     hooks:
       - id: prettier
         types_or: [javascript, jsx, ts, tsx, json, yaml, markdown]
-        exclude: ^(dist/|node_modules/|\.git/)
+        exclude: ^(dist/|node_modules/|\.git/|rpjump_extension/vendor/)
 
   # JavaScript linting with ESLint (pinned to v8 for .eslintrc.json support)
   - repo: https://github.com/pre-commit/mirrors-eslint
@@ -27,7 +27,7 @@ repos:
       - id: eslint
         types_or: [file]
         types: [javascript]
-        exclude: ^(dist/|node_modules/|\.git/)
+        exclude: ^(dist/|node_modules/|\.git/|rpjump_extension/vendor/)
         args: ['--fix', '--config', '.eslintrc.json']
 
   # Check for commit signoff
