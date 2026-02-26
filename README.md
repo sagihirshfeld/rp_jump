@@ -15,12 +15,13 @@ When debugging test failures in ReportPortal, finding the corresponding logs in 
 
 ## Architecture
 
-The project is a self-contained Chrome extension:
+The project is a self-contained Chrome extension (`rpjump_extension/`):
 
-- **Chrome Extension** (`rpjump_extension/`):
-  - `background.js`: Main extension logic and event handlers
-  - `report_portal.js`: Core logic that queries ReportPortal API and navigates Magna's directory structure
-  - `options.html/js`: Configuration interface for API credentials
+- `background/` -- Service worker, context menu, and ReportPortal API logic
+- `directory-browser/` -- Local filesystem browser UI
+- `options/` -- Settings and configuration page
+- `shared/` -- Common utilities (favorites, errors, helpers)
+- `vendor/` -- Bundled third-party libraries (see [Third-Party Open Source](#third-party-open-source))
 
 ## Prerequisites
 
@@ -76,72 +77,23 @@ RP Jump allows you to save frequently accessed log sub-directories (e.g., specif
 
 - **Adding**: Navigate to a sub-directory in the logs (e.g., inside `must-gather`), right-click, and select **Add to favorites!**. You can give it a custom name.
 - **Using**: On any future test failure page (or while browsing other logs), select your favorite from the menu. RP Jump will find the logs root for the _current_ test run and append your favorite's sub-path.
-- **Managing**: You can view and delete saved favorites from the extension's **Options** page.
+- **Managing**: Open the extension's **Options** page to rename, reorder (drag and drop), export/import, or delete favorites.
 
 ### Local Directory Browser
 
-RP Jump includes a built-in local directory browser that displays your filesystem in Apache autoindex style, perfect for browsing local log archives or tarballs that have been extracted locally.
+RP Jump includes a built-in local directory browser. Right-click and select **Browse Local Directory 📁** to pick a folder from your machine and browse it in Apache autoindex style -- no server needed. Supports full folder/file navigation, breadcrumbs, file viewing, and browser back/forward. Useful for browsing extracted tarballs or local log archives in the same familiar interface as remote Magna logs.
 
-**How to use:**
+## Third-Party Open Source
 
-1. Right-click anywhere and select **Browse Local Directory 📁** from the RP Jump menu
-2. A new tab opens with a "Pick Directory" button
-3. Click the button to select a local directory using your browser's file picker
-4. Browse the directory contents in familiar Apache autoindex style
+RP Jump bundles the following open-source libraries (all MIT-licensed):
 
-**Features:**
+| Library            | Description                                      | Repository                                              |
+| ------------------ | ------------------------------------------------ | ------------------------------------------------------- |
+| **pako** 2.1.0     | JavaScript zlib port (deflate/inflate/gzip)      | [nodeca/pako](https://github.com/nodeca/pako)           |
+| **js-untar** 2.0.0 | Tar file extraction in the browser               | [InvokIT/js-untar](https://github.com/InvokIT/js-untar) |
+| **fflate**         | High-performance compression (deflate/gzip/zlib) | [101arrowz/fflate](https://github.com/101arrowz/fflate) |
 
-- **No server required**: Uses the browser's File System Access API
-- **Apache-style listing**: Displays files and folders just like the remote Magna logs
-- **Full navigation**: Click folders to navigate into subdirectories, use "Parent Directory" to go back
-- **Browser back/forward support**: Use browser back/forward buttons to navigate through directory history and return from file views
-- **Breadcrumb navigation**: Click any part of the path to jump to that level
-- **File viewing**: Click files to open them in the same tab (text files, logs, images, etc. display in browser; use back button to return to directory)
-- **Sorting**: Directories listed first, then files, all alphabetically sorted
-- **Metadata display**: Shows file sizes and last modified dates
-
-**Use cases:**
-
-- Browse extracted tarball contents locally before they're uploaded
-- Navigate local log archives in the same familiar interface
-- Prepare for the transition to tarball-based log storage
-
-## How It Works
-
-1. **URL Parsing**: Extracts `launch_id` and `test_item_id` from the ReportPortal URL
-2. **API Queries**: Fetches launch and test item details from ReportPortal API
-3. **Log Location Extraction**: Parses the launch description to find the Magna logs root URL
-4. **Directory Navigation**:
-   - Searches for `failed_testcase` directories
-   - Matches the test name to find the correct directory
-   - Navigates to `ocs_must_gather` and finds `quay*/registry*` subdirectories
-5. **Result**: Returns the final URL to the logs directory
-
-## Configuration
-
-Configuration is managed through the Chrome extension options page:
-
-1. Right-click the RP Jump extension icon
-2. Select **Options**
-3. Enter your configuration:
-   - **ReportPortal API Key**: Your ReportPortal API bearer token
-   - **ReportPortal Base URL**: Base URL of your ReportPortal instance (e.g., `https://reportportal.example.com`)
-
-   **Note**: The extension uses the "ocs" project (hardcoded).
-
-4. **Manage Favorites**:
-   - The options page also lists all your saved favorites.
-   - Click **Rename** to rename a favorite.
-   - Drag and drop using the handle to reorder favorites.
-   - Use **Export/Import** to back up or restore favorites (JSON).
-   - Click **Delete** next to any favorite to remove it.
-
-The configuration is saved locally in Chrome's extension storage and persists across browser sessions.
-
-### "No failed_testcase directories found"
-
-- The test may not have failed, or logs may not be available on Magna yet
-- Verify the Magna logs server is accessible
+Full license texts are in [`vendor/THIRD_PARTY_NOTICES.md`](rpjump_extension/vendor/THIRD_PARTY_NOTICES.md).
 
 ## Security Notes
 

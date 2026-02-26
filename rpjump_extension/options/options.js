@@ -7,7 +7,7 @@ import {
   renameFavorite,
   reorderFavoriteOrder,
   setFavoritesAndOrder,
-} from './favorites.js';
+} from '../shared/favorites.js';
 
 // Load saved configuration
 document.addEventListener('DOMContentLoaded', async () => {

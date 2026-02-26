@@ -1,8 +1,8 @@
 // Import report_portal functions
 import { findMustGatherTarballUrl } from './report_portal.js';
-import { UsageError, UnexpectedStructureError } from './errors.js';
-import { getMustGatherRootUrl } from './utils.js';
-import { addFavoriteFromUrl, getFavoritePath } from './favorites.js';
+import { UsageError, UnexpectedStructureError } from '../shared/errors.js';
+import { getMustGatherRootUrl } from '../shared/utils.js';
+import { addFavoriteFromUrl, getFavoritePath } from '../shared/favorites.js';
 import { rebuildContextMenu } from './context_menu.js';
 
 function alertInTab(tabId, message) {
@@ -64,7 +64,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const pageUrl = info.linkUrl || tab.url;
     let targetUrl;
 
-    const browserPageUrl = chrome.runtime.getURL('directory_browser.html');
+    const browserPageUrl = chrome.runtime.getURL('directory-browser/directory_browser.html');
     const isDirectoryBrowser = tab.url?.startsWith(browserPageUrl);
     const extensionOrigin = new URL(browserPageUrl).origin;
     const isExtensionBlob = tab.url?.startsWith(`blob:${extensionOrigin}`);

@@ -1,4 +1,4 @@
-import { getOrderedFavoriteTitles } from './favorites.js';
+import { getOrderedFavoriteTitles } from '../shared/favorites.js';
 
 /**
  * Rebuild the extension context menu.

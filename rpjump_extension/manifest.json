@@ -6,14 +6,14 @@
   "permissions": ["activeTab", "scripting", "contextMenus", "storage"],
   "host_permissions": ["<all_urls>"],
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "background/background.js",
     "type": "module"
   },
   "action": {
     "default_icon": "icon_alert.png",
     "default_title": "RP Jump"
   },
-  "options_page": "options.html",
+  "options_page": "options/options.html",
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   }

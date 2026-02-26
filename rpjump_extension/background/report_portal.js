@@ -2,8 +2,8 @@
  * Core business logic for processing ReportPortal URLs and finding Magna logs
  */
 
-import { extractIds, fetchJson, fetchUrlLines, customQuote } from './utils.js';
-import { UsageError, UnexpectedStructureError } from './errors.js';
+import { extractIds, fetchJson, fetchUrlLines, customQuote } from '../shared/utils.js';
+import { UsageError, UnexpectedStructureError } from '../shared/errors.js';
 
 /**
  * Resolve the test log directory on Magna from a ReportPortal URL.
