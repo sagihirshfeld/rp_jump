@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Local Directory Browser</title>
+  <title>Directory Browser</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -18,47 +18,6 @@
       padding: 0;
       border-bottom: 1px solid #ddd;
       padding-bottom: 10px;
-    }
-
-    .message-container {
-      text-align: center;
-      padding: 60px 20px;
-    }
-
-    .message-container h2 {
-      color: #856404;
-      margin-bottom: 15px;
-    }
-
-    .message-container p {
-      color: #666;
-      margin-bottom: 20px;
-    }
-
-    .action-btn {
-      background: #4CAF50;
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 4px;
-      font-size: 14px;
-      cursor: pointer;
-      font-weight: 500;
-      text-decoration: none;
-      display: inline-block;
-    }
-
-    .action-btn:hover {
-      background: #45a049;
-    }
-
-    .action-btn.secondary {
-      background: #6c757d;
-      margin-left: 10px;
-    }
-
-    .action-btn.secondary:hover {
-      background: #5a6268;
     }
 
     .directory-listing {
@@ -286,17 +245,8 @@
   </style>
 </head>
 <body>
-  <div class="message-container" id="messageContainer" style="display: none;">
-    <h2 id="messageTitle">⚙️ Configuration Required</h2>
-    <p id="messageText">Please configure a browse directory in the extension options.</p>
-    <a href="#" class="action-btn" id="openOptionsBtn">Open Options</a>
-  </div>
-
   <div class="directory-listing" id="directoryListing">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-      <h1 id="directoryTitle" style="margin: 0;">Index of /</h1>
-      <a href="#" class="action-btn secondary" id="changeDirBtn" style="padding: 8px 16px; font-size: 13px;">⚙️ Change Directory</a>
-    </div>
+    <h1 id="directoryTitle">Index of /</h1>
     <div class="breadcrumb" id="breadcrumb"></div>
     <table>
       <thead>
@@ -313,18 +263,18 @@
     </table>
   </div>
 
-  <!-- Tarball Prompt Modal -->
+  <!-- Tarball URL Prompt Modal -->
   <div id="tarballPrompt" class="modal">
     <div class="modal-content">
-      <h3>Browse Local Directory</h3>
-      <p>Enter tarball name or paste a URL (optional):</p>
-      <input type="text" id="tarballNameInput" placeholder="e.g., logs-2024.tar.gz or https://example.com/archive.tar.gz" autocomplete="off">
+      <h3>Download Tarball</h3>
+      <p>Paste a tarball URL to download and extract:</p>
+      <input type="text" id="tarballNameInput" placeholder="https://example.com/archive.tar.gz" autocomplete="off">
       <div class="help-text">
-        Paste a URL to download and extract a remote tarball, enter a filename to extract a local tarball, or leave empty to browse the directory normally. Supports .tar, .tar.gz, and .tgz formats.
+        Supports .tar, .tar.gz, and .tgz formats.
       </div>
       <div class="button-group">
         <button id="cancelPromptBtn">Cancel</button>
-        <button id="proceedPromptBtn" class="primary">Browse</button>
+        <button id="proceedPromptBtn" class="primary">Download</button>
       </div>
     </div>
   </div>

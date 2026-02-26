@@ -1,41 +1,17 @@
+/* global pako */
 /**
- * Directory Browser - Apache autoindex style file browser using File System Access API
+ * Directory Browser - Apache autoindex style file browser for extracted tarballs (OPFS)
  */
 
-let rootDirectoryHandle = null;
 let currentDirectoryHandle = null;
 let pathStack = [];
-
-// IndexedDB for storing directory handle
-const DB_NAME = 'DirectoryBrowserDB';
-const DB_VERSION = 1;
-const STORE_NAME = 'handles';
 
 // SessionStorage key for file return restoration
 const SESSION_KEY = 'directoryBrowserReturn';
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', async () => {
-  // Handle browser back/forward buttons
   window.addEventListener('popstate', handlePopState);
-
-  // Handle "Change Directory" button
-  const changeDirBtn = document.getElementById('changeDirBtn');
-  if (changeDirBtn) {
-    changeDirBtn.addEventListener('click', e => {
-      e.preventDefault();
-      chrome.runtime.openOptionsPage();
-    });
-  }
-
-  // Handle "Open Options" button
-  const openOptionsBtn = document.getElementById('openOptionsBtn');
-  if (openOptionsBtn) {
-    openOptionsBtn.addEventListener('click', e => {
-      e.preventDefault();
-      chrome.runtime.openOptionsPage();
-    });
-  }
 
   // Priority 1: Check if returning from file view
   const returnData = getReturnData();
@@ -45,24 +21,83 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Priority 2: Try to restore from history state on page load
-  if (window.history.state && window.history.state.isDirectory) {
-    if (window.history.state.isExtractedView) {
-      await restoreExtractedDirectoryFromState(window.history.state);
-    } else {
-      await restoreDirectoryFromState(window.history.state);
-    }
+  if (
+    window.history.state &&
+    window.history.state.isDirectory &&
+    window.history.state.isExtractedView
+  ) {
+    await restoreExtractedDirectoryFromState(window.history.state);
     return;
   }
 
-  // Priority 3: Show tarball prompt or auto-load configured directory
-  await showTarballPromptOrLoadDirectory();
+  // Priority 3: Check URL params for tarball URL (from must-gather root action)
+  const urlParams = new URLSearchParams(window.location.search);
+  const tarballUrl = urlParams.get('tarballUrl');
+  if (tarballUrl) {
+    const autoNavigateToRoot = urlParams.get('mustGatherRoot') === 'true';
+    const favoritePath = urlParams.get('favoritePath') || '';
+    await downloadAndExtractTarball(tarballUrl, autoNavigateToRoot, favoritePath);
+    return;
+  }
+
+  // Priority 4: Show tarball URL prompt
+  await showTarballUrlPrompt();
 });
 
 /**
- * Show tarball prompt dialog or load directory directly
+ * Save the current directory browser sub-path (relative to quay/registry root) as a favorite.
+ * Uses window.prompt() since chrome.scripting.executeScript cannot target extension pages.
  */
-async function showTarballPromptOrLoadDirectory() {
-  // Show the prompt dialog
+async function addCurrentPathToFavorites() {
+  try {
+    const rootIndex = pathStack.findIndex(p => p.includes('quay') || p.includes('registry'));
+    if (rootIndex === -1 || rootIndex >= pathStack.length - 1) {
+      alert('Navigate into a sub-directory under the quay/registry root first.');
+      return;
+    }
+
+    const relativePathSuffix = pathStack.slice(rootIndex + 1).join('/');
+    const { favorites = {}, favoriteOrder = [] } = await chrome.storage.local.get([
+      'favorites',
+      'favoriteOrder',
+    ]);
+
+    if (Object.values(favorites).includes(relativePathSuffix)) {
+      alert('This sub-path is already in favorites.');
+      return;
+    }
+
+    const defaultTitle = pathStack[pathStack.length - 1];
+    const title = prompt('Enter a name for this favorite:', defaultTitle);
+    if (!title?.trim()) return;
+
+    const trimmed = title.trim();
+    favorites[trimmed] = relativePathSuffix;
+    const order = Array.isArray(favoriteOrder) ? favoriteOrder : [];
+    const nextOrder = order.includes(trimmed) ? order : [...order, trimmed];
+    await chrome.storage.local.set({ favorites, favoriteOrder: nextOrder });
+    alert(`Favorite "${trimmed}" saved!`);
+  } catch (error) {
+    console.error('Failed to add favorite:', error);
+    alert(`Failed to add favorite: ${error.message}`);
+  }
+}
+
+// Listen for messages from background.js (e.g. context menu actions while inside directory browser)
+chrome.runtime.onMessage.addListener(message => {
+  if (message.action === 'navigateToMustGatherRoot') {
+    navigateToMustGatherRoot();
+  } else if (message.action === 'navigateToFavorite') {
+    navigateToMustGatherRoot(message.favoritePath);
+  } else if (message.action === 'addFavorite') {
+    addCurrentPathToFavorites();
+  }
+});
+
+/**
+ * Show tarball URL prompt dialog
+ */
+async function showTarballUrlPrompt() {
   const promptModal = document.getElementById('tarballPrompt');
   const tarballInput = document.getElementById('tarballNameInput');
   const cancelBtn = document.getElementById('cancelPromptBtn');
@@ -71,70 +106,35 @@ async function showTarballPromptOrLoadDirectory() {
   promptModal.classList.add('active');
   tarballInput.focus();
 
-  // Handle Enter key in input
   tarballInput.addEventListener('keypress', e => {
     if (e.key === 'Enter') {
       proceedBtn.click();
     }
   });
 
-  // Handle Cancel button
   cancelBtn.addEventListener('click', () => {
     promptModal.classList.remove('active');
-    window.close(); // Close the tab
+    window.close();
   });
 
-  // Handle Proceed button
   proceedBtn.addEventListener('click', async () => {
-    const tarballName = tarballInput.value.trim();
+    const url = tarballInput.value.trim();
     promptModal.classList.remove('active');
 
-    if (tarballName.startsWith('http://') || tarballName.startsWith('https://')) {
-      await downloadAndExtractTarball(tarballName);
-    } else if (tarballName) {
-      console.log('=== TARBALL EXTRACTION START ===');
-      console.log('Tarball name:', tarballName);
-      await extractAndDisplayTarball(tarballName);
-    } else {
-      console.log('=== NORMAL DIRECTORY LOAD ===');
-      await autoLoadConfiguredDirectory();
+    if (url) {
+      await downloadAndExtractTarball(url);
     }
   });
 }
 
 /**
- * Store directory handle in IndexedDB
- */
-async function storeDirectoryHandle(handle) {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-
-    // Wrap the put request in a promise
-    await new Promise((resolve, reject) => {
-      const request = store.put(handle, 'rootDirectory');
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-
-    // Wait for transaction to complete
-    await new Promise((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (error) {
-    console.warn('Failed to store directory handle:', error);
-  }
-}
-
-/**
  * Store return data in sessionStorage before navigating to file
  */
-function storeReturnData() {
+function storeReturnData(fileName = null) {
   const returnData = {
     isFileReturn: true,
     pathStack: [...pathStack],
+    fileName,
     timestamp: Date.now(),
     isExtractedView: isExtractedView,
     extractedTarballName: extractedTarballName,
@@ -186,160 +186,57 @@ function clearReturnData() {
  */
 async function restoreFromFileReturn(returnData) {
   try {
-    // Clear the return data immediately
     clearReturnData();
-
-    // Show loading state
     showLoadingState('Restoring directory browser...');
 
-    // Restore pathStack
     pathStack = returnData.pathStack;
+    isExtractedView = true;
+    extractedTarballName = returnData.extractedTarballName;
 
-    if (returnData.isExtractedView) {
-      // Restore extracted tarball view via OPFS
-      isExtractedView = true;
-      extractedTarballName = returnData.extractedTarballName;
+    const opfsRoot = await navigator.storage.getDirectory();
+    const extractedDir = await opfsRoot.getDirectoryHandle('extracted');
+    const sanitizedName = extractedTarballName.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const tarballDir = await extractedDir.getDirectoryHandle(sanitizedName);
 
-      const opfsRoot = await navigator.storage.getDirectory();
-      const extractedDir = await opfsRoot.getDirectoryHandle('extracted');
-      const sanitizedName = extractedTarballName.replace(/[^a-zA-Z0-9-_]/g, '_');
-      const tarballDir = await extractedDir.getDirectoryHandle(sanitizedName);
-
-      let handle = tarballDir;
-      for (let i = 1; i < pathStack.length; i++) {
-        handle = await handle.getDirectoryHandle(pathStack[i]);
-      }
-
-      currentDirectoryHandle = handle;
-
-      document.getElementById('messageContainer').style.display = 'none';
-      document.getElementById('directoryListing').classList.add('active');
-
-      document.getElementById('directoryTitle').textContent = `Extracted: ${extractedTarballName}`;
-
-      const changeDirBtn = document.getElementById('changeDirBtn');
-      changeDirBtn.textContent = '← Back to Directory';
-      changeDirBtn.onclick = async e => {
-        e.preventDefault();
-        await returnToNormalDirectory();
-      };
-
-      await renderOPFSDirectory(handle, false);
-    } else {
-      // Restore normal filesystem view
-      rootDirectoryHandle = await getStoredDirectoryHandle();
-      if (!rootDirectoryHandle) {
-        throw new Error('Directory handle not found. Please select directory again.');
-      }
-
-      const permission = await rootDirectoryHandle.queryPermission({ mode: 'read' });
-      if (permission !== 'granted') {
-        const requestPermission = await rootDirectoryHandle.requestPermission({ mode: 'read' });
-        if (requestPermission !== 'granted') {
-          throw new Error('Permission denied. Please select directory again.');
-        }
-      }
-
-      let handle = rootDirectoryHandle;
-      for (let i = 1; i < pathStack.length; i++) {
-        handle = await handle.getDirectoryHandle(pathStack[i]);
-      }
-
-      currentDirectoryHandle = handle;
-
-      document.getElementById('messageContainer').style.display = 'none';
-      document.getElementById('directoryListing').classList.add('active');
-
-      await renderDirectory(handle, false);
-    }
-
-    hideLoadingState();
-  } catch (error) {
-    console.error('Failed to restore from file return:', error);
-    hideLoadingState();
-    showError(`Failed to restore directory: ${error.message}`);
-
-    showConfigurationRequired(`Failed to restore directory: ${error.message}`);
-  }
-}
-
-/**
- * Retrieve directory handle from IndexedDB
- */
-async function getStoredDirectoryHandle() {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-
-    // Wrap the get request in a promise
-    const handle = await new Promise((resolve, reject) => {
-      const request = store.get('rootDirectory');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-
-    if (handle) {
-      // Verify we still have permission
-      const permission = await handle.queryPermission({ mode: 'read' });
-      if (permission === 'granted') {
-        return handle;
-      }
-    }
-  } catch (error) {
-    console.warn('Could not retrieve stored handle:', error);
-  }
-  return null;
-}
-
-/**
- * Open IndexedDB
- */
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-
-    request.onupgradeneeded = event => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    };
-  });
-}
-
-/**
- * Restore directory from history state
- */
-async function restoreDirectoryFromState(state) {
-  try {
-    // Get the stored root handle
-    rootDirectoryHandle = await getStoredDirectoryHandle();
-    if (!rootDirectoryHandle) {
-      return; // Can't restore without root handle
-    }
-
-    pathStack = state.pathStack;
-
-    // Show the directory listing UI
-    document.getElementById('messageContainer').style.display = 'none';
-    document.getElementById('directoryListing').classList.add('active');
-
-    // Navigate to the directory specified in the state
-    let handle = rootDirectoryHandle;
+    let handle = tarballDir;
     for (let i = 1; i < pathStack.length; i++) {
       handle = await handle.getDirectoryHandle(pathStack[i]);
     }
 
     currentDirectoryHandle = handle;
-    await renderDirectory(handle, false); // false = don't push to history
+
+    document.getElementById('directoryListing').classList.add('active');
+    document.getElementById('directoryTitle').textContent = `Extracted: ${extractedTarballName}`;
+
+    await renderOPFSDirectory(handle, false);
+
+    hideLoadingState();
+
+    const { pendingAddFavorite } = await chrome.storage.session.get('pendingAddFavorite');
+    if (pendingAddFavorite) {
+      await chrome.storage.session.remove('pendingAddFavorite');
+      if (returnData.fileName) {
+        pathStack.push(returnData.fileName);
+      }
+      addCurrentPathToFavorites();
+      if (returnData.fileName) {
+        pathStack.pop();
+      }
+    }
+
+    const { pendingNavigate } = await chrome.storage.session.get('pendingNavigate');
+    if (pendingNavigate) {
+      await chrome.storage.session.remove('pendingNavigate');
+      if (pendingNavigate.type === 'mustGatherRoot') {
+        await navigateToMustGatherRoot();
+      } else if (pendingNavigate.type === 'favorite') {
+        await navigateToMustGatherRoot(pendingNavigate.favoritePath);
+      }
+    }
   } catch (error) {
-    console.error('Failed to restore directory:', error);
-    // Show configuration required message if restoration fails
-    showConfigurationRequired(`Failed to restore directory: ${error.message}`);
+    console.error('Failed to restore from file return:', error);
+    hideLoadingState();
+    showError(`Failed to restore directory: ${error.message}`);
   }
 }
 
@@ -347,12 +244,13 @@ async function restoreDirectoryFromState(state) {
  * Handle browser back/forward button navigation
  */
 async function handlePopState(event) {
-  if (event.state && event.state.pathStack && event.state.isDirectory) {
-    if (event.state.isExtractedView) {
-      await restoreExtractedDirectoryFromState(event.state);
-    } else {
-      await restoreDirectoryFromState(event.state);
-    }
+  if (
+    event.state &&
+    event.state.pathStack &&
+    event.state.isDirectory &&
+    event.state.isExtractedView
+  ) {
+    await restoreExtractedDirectoryFromState(event.state);
   }
 }
 
@@ -365,16 +263,8 @@ async function restoreExtractedDirectoryFromState(state) {
     extractedTarballName = state.extractedTarballName;
     pathStack = state.pathStack;
 
-    document.getElementById('messageContainer').style.display = 'none';
     document.getElementById('directoryListing').classList.add('active');
     document.getElementById('directoryTitle').textContent = `Extracted: ${extractedTarballName}`;
-
-    const changeDirBtn = document.getElementById('changeDirBtn');
-    changeDirBtn.textContent = '← Back to Directory';
-    changeDirBtn.onclick = async e => {
-      e.preventDefault();
-      await returnToNormalDirectory();
-    };
 
     const tarballRoot = await getExtractedTarballRoot();
     let handle = tarballRoot;
@@ -387,132 +277,6 @@ async function restoreExtractedDirectoryFromState(state) {
   } catch (error) {
     console.error('Failed to restore extracted directory:', error);
     showError(`Failed to restore directory: ${error.message}`);
-  }
-}
-
-/**
- * Auto-load configured directory from IndexedDB
- */
-async function autoLoadConfiguredDirectory() {
-  try {
-    // Try to get stored directory handle
-    rootDirectoryHandle = await getStoredDirectoryHandle();
-
-    if (!rootDirectoryHandle) {
-      // No directory configured - show message
-      showConfigurationRequired();
-      return;
-    }
-
-    // Verify we still have permission
-    const permission = await rootDirectoryHandle.queryPermission({ mode: 'read' });
-    if (permission !== 'granted') {
-      const requestPermission = await rootDirectoryHandle.requestPermission({ mode: 'read' });
-      if (requestPermission !== 'granted') {
-        showConfigurationRequired(
-          'Permission denied. Please reconfigure the directory in options.'
-        );
-        return;
-      }
-    }
-
-    // Successfully got handle with permission
-    currentDirectoryHandle = rootDirectoryHandle;
-    pathStack = [rootDirectoryHandle.name];
-
-    // Hide message, show listing
-    document.getElementById('messageContainer').style.display = 'none';
-    document.getElementById('directoryListing').classList.add('active');
-
-    // Set initial history state
-    const state = {
-      pathStack: [...pathStack],
-      isDirectory: true,
-    };
-    const url = `#${pathStack.join('/')}`;
-    window.history.pushState(state, '', url);
-
-    // Render the directory
-    await renderDirectory(rootDirectoryHandle, false);
-  } catch (error) {
-    console.error('Failed to auto-load directory:', error);
-    showConfigurationRequired(`Failed to load directory: ${error.message}`);
-  }
-}
-
-/**
- * Show configuration required message
- */
-function showConfigurationRequired(customMessage = null) {
-  const messageContainer = document.getElementById('messageContainer');
-  const messageTitle = document.getElementById('messageTitle');
-  const messageText = document.getElementById('messageText');
-
-  messageContainer.style.display = 'block';
-  document.getElementById('directoryListing').classList.remove('active');
-
-  if (customMessage) {
-    messageTitle.textContent = '⚠️ Configuration Issue';
-    messageText.textContent = customMessage;
-  } else {
-    messageTitle.textContent = '⚙️ Configuration Required';
-    messageText.textContent = 'Please configure a browse directory in the extension options.';
-  }
-}
-
-/**
- * Render directory contents in Apache autoindex style
- * @param {FileSystemDirectoryHandle} dirHandle - Directory to render
- * @param {boolean} pushState - Whether to push state to browser history (default: true)
- */
-async function renderDirectory(dirHandle, pushState = true) {
-  try {
-    const fileList = document.getElementById('fileList');
-    fileList.innerHTML = '';
-
-    // Update title and breadcrumb
-    const path = pathStack.join('/');
-    document.getElementById('directoryTitle').textContent = `Index of /${path}`;
-    updateBreadcrumb();
-
-    // Push state to browser history for back button support
-    if (pushState) {
-      const state = {
-        pathStack: [...pathStack],
-        isDirectory: true,
-      };
-      const url = `#${pathStack.join('/')}`;
-      window.history.pushState(state, '', url);
-    }
-
-    const entries = [];
-
-    // Collect all entries
-    for await (const entry of dirHandle.values()) {
-      entries.push(entry);
-    }
-
-    // Sort: directories first, then files, alphabetically
-    entries.sort((a, b) => {
-      if (a.kind !== b.kind) {
-        return a.kind === 'directory' ? -1 : 1;
-      }
-      return a.name.localeCompare(b.name);
-    });
-
-    // Add parent directory link if not at root
-    if (pathStack.length > 1) {
-      const row = createParentDirectoryRow();
-      fileList.appendChild(row);
-    }
-
-    // Add entries
-    for (const entry of entries) {
-      const row = await createEntryRow(entry);
-      fileList.appendChild(row);
-    }
-  } catch (error) {
-    showError(`Failed to read directory: ${error.message}`);
   }
 }
 
@@ -553,81 +317,6 @@ function createParentDirectoryRow() {
 }
 
 /**
- * Create a row for a file or directory entry
- */
-async function createEntryRow(entry) {
-  const row = document.createElement('tr');
-
-  // Name column
-  const nameCell = document.createElement('td');
-  const link = document.createElement('a');
-  link.href = '#';
-
-  if (entry.kind === 'directory') {
-    link.innerHTML = `<span class="icon">📁</span>${entry.name}/`;
-    link.addEventListener('click', async e => {
-      e.preventDefault();
-      await navigateInto(entry);
-    });
-  } else {
-    link.innerHTML = `<span class="icon">📄</span>${entry.name}`;
-    link.addEventListener('click', async e => {
-      e.preventDefault();
-      await openFile(entry);
-    });
-  }
-  nameCell.appendChild(link);
-
-  // Date column
-  const dateCell = document.createElement('td');
-  dateCell.className = 'date';
-  let dateStr = '-';
-  try {
-    if (entry.kind === 'file') {
-      const file = await entry.getFile();
-      dateStr = formatDate(file.lastModified);
-    }
-  } catch (error) {
-    console.warn('Could not get file metadata:', error);
-  }
-  dateCell.textContent = dateStr;
-
-  // Size column
-  const sizeCell = document.createElement('td');
-  sizeCell.className = 'size';
-  let sizeStr = '-';
-  try {
-    if (entry.kind === 'file') {
-      const file = await entry.getFile();
-      sizeStr = formatSize(file.size);
-    }
-  } catch (error) {
-    console.warn('Could not get file size:', error);
-  }
-  sizeCell.textContent = sizeStr;
-
-  // Description column
-  const descCell = document.createElement('td');
-  descCell.textContent = '-';
-
-  row.appendChild(nameCell);
-  row.appendChild(dateCell);
-  row.appendChild(sizeCell);
-  row.appendChild(descCell);
-
-  return row;
-}
-
-/**
- * Navigate into a subdirectory
- */
-async function navigateInto(dirHandle) {
-  currentDirectoryHandle = dirHandle;
-  pathStack.push(dirHandle.name);
-  await renderDirectory(dirHandle);
-}
-
-/**
  * Get the OPFS root handle for the current extracted tarball
  */
 async function getExtractedTarballRoot() {
@@ -645,56 +334,32 @@ async function navigateUp() {
 
   pathStack.pop();
 
-  if (isExtractedView) {
-    const tarballRoot = await getExtractedTarballRoot();
-    let handle = tarballRoot;
-    for (let i = 1; i < pathStack.length; i++) {
-      handle = await handle.getDirectoryHandle(pathStack[i]);
-    }
-    currentDirectoryHandle = handle;
-    await renderOPFSDirectory(handle);
-  } else {
-    let handle = rootDirectoryHandle;
-    for (let i = 1; i < pathStack.length; i++) {
-      handle = await handle.getDirectoryHandle(pathStack[i]);
-    }
-    currentDirectoryHandle = handle;
-    await renderDirectory(handle);
+  const tarballRoot = await getExtractedTarballRoot();
+  let handle = tarballRoot;
+  for (let i = 1; i < pathStack.length; i++) {
+    handle = await handle.getDirectoryHandle(pathStack[i]);
   }
+  currentDirectoryHandle = handle;
+  await renderOPFSDirectory(handle);
 }
 
 /**
  * Navigate to a specific path in breadcrumb
  */
 async function navigateToBreadcrumb(index) {
-  if (isExtractedView) {
-    const tarballRoot = await getExtractedTarballRoot();
-    if (index === 0) {
-      currentDirectoryHandle = tarballRoot;
-      pathStack = [extractedTarballName];
-    } else {
-      pathStack = pathStack.slice(0, index + 1);
-      let handle = tarballRoot;
-      for (let i = 1; i < pathStack.length; i++) {
-        handle = await handle.getDirectoryHandle(pathStack[i]);
-      }
-      currentDirectoryHandle = handle;
-    }
-    await renderOPFSDirectory(currentDirectoryHandle);
+  const tarballRoot = await getExtractedTarballRoot();
+  if (index === 0) {
+    currentDirectoryHandle = tarballRoot;
+    pathStack = [extractedTarballName];
   } else {
-    if (index === 0) {
-      currentDirectoryHandle = rootDirectoryHandle;
-      pathStack = [rootDirectoryHandle.name];
-    } else {
-      pathStack = pathStack.slice(0, index + 1);
-      let handle = rootDirectoryHandle;
-      for (let i = 1; i < pathStack.length; i++) {
-        handle = await handle.getDirectoryHandle(pathStack[i]);
-      }
-      currentDirectoryHandle = handle;
+    pathStack = pathStack.slice(0, index + 1);
+    let handle = tarballRoot;
+    for (let i = 1; i < pathStack.length; i++) {
+      handle = await handle.getDirectoryHandle(pathStack[i]);
     }
-    await renderDirectory(currentDirectoryHandle);
+    currentDirectoryHandle = handle;
   }
+  await renderOPFSDirectory(currentDirectoryHandle);
 }
 
 /**
@@ -719,28 +384,6 @@ function updateBreadcrumb() {
     });
     breadcrumb.appendChild(link);
   });
-}
-
-/**
- * Open a file in the same tab (back button will return to directory)
- */
-async function openFile(fileHandle) {
-  try {
-    const file = await fileHandle.getFile();
-    const url = URL.createObjectURL(file);
-
-    // Store current directory context in sessionStorage
-    // This allows restoration when user clicks back button
-    storeReturnData();
-
-    // Store directory handle in IndexedDB for restoration
-    await storeDirectoryHandle(rootDirectoryHandle);
-
-    // Navigate to the file in the same tab
-    window.location.href = url;
-  } catch (error) {
-    showError(`Failed to open file: ${error.message}`);
-  }
 }
 
 /**
@@ -998,42 +641,12 @@ async function extractFromArrayBuffer(arrayBuffer, tarballName) {
 }
 
 /**
- * Extract and display tarball contents from local filesystem
- */
-async function extractAndDisplayTarball(tarballName) {
-  try {
-    showProgress('Initializing...', 0);
-
-    rootDirectoryHandle = await getStoredDirectoryHandle();
-    if (!rootDirectoryHandle) {
-      throw new Error('No directory configured. Please configure in options.');
-    }
-
-    showProgress('Searching for tarball...', 10);
-    const tarballFileHandle = await findTarballFile(tarballName);
-
-    showProgress('Reading tarball file...', 20);
-    const tarballFile = await tarballFileHandle.getFile();
-    const arrayBuffer = await tarballFile.arrayBuffer();
-
-    await extractFromArrayBuffer(arrayBuffer, tarballName);
-
-    hideProgress();
-  } catch (error) {
-    hideProgress();
-    console.error('Tarball extraction failed:', error);
-    showError(`Failed to extract tarball: ${error.message}`);
-
-    setTimeout(async () => {
-      await autoLoadConfiguredDirectory();
-    }, 3000);
-  }
-}
-
-/**
  * Download a tarball from a URL, then extract and display it.
+ * @param {string} url - URL of the tarball to download.
+ * @param {boolean} mustGatherRoot - If true, auto-navigate to the quay/registry directory after extraction.
+ * @param {string} favoritePath - Optional relative path to navigate into after reaching quay/registry root.
  */
-async function downloadAndExtractTarball(url) {
+async function downloadAndExtractTarball(url, mustGatherRoot = false, favoritePath = '') {
   try {
     showProgress('Connecting...', 0);
 
@@ -1059,6 +672,7 @@ async function downloadAndExtractTarball(url) {
       const chunks = [];
       let received = 0;
 
+      // eslint-disable-next-line no-constant-condition
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -1085,40 +699,16 @@ async function downloadAndExtractTarball(url) {
 
     await extractFromArrayBuffer(arrayBuffer, tarballName);
 
+    if (mustGatherRoot) {
+      await navigateToMustGatherRoot(favoritePath);
+    }
+
     hideProgress();
   } catch (error) {
     hideProgress();
     console.error('URL tarball download failed:', error);
     showError(`Failed to download tarball: ${error.message}`);
   }
-}
-
-/**
- * Find tarball file in configured directory
- */
-async function findTarballFile(filename) {
-  const rootHandle = await getStoredDirectoryHandle();
-  if (!rootHandle) {
-    throw new Error('No directory configured');
-  }
-
-  // Try exact match first
-  try {
-    return await rootHandle.getFileHandle(filename);
-  } catch (e) {
-    // Try with common extensions
-    const extensions = ['', '.tar', '.tar.gz', '.tgz'];
-    for (const ext of extensions) {
-      try {
-        const testName = filename.endsWith(ext.substring(1)) ? filename : filename + ext;
-        return await rootHandle.getFileHandle(testName);
-      } catch (err) {
-        // Continue trying
-      }
-    }
-  }
-
-  throw new Error(`Tarball not found: ${filename}`);
 }
 
 /**
@@ -1176,26 +766,13 @@ async function displayExtractedContents(tarballName) {
     const sanitizedName = tarballName.replace(/[^a-zA-Z0-9-_]/g, '_');
     const tarballDir = await extractedDir.getDirectoryHandle(sanitizedName);
 
-    // Set up state for extracted view
     isExtractedView = true;
     extractedTarballName = tarballName;
     currentDirectoryHandle = tarballDir;
     pathStack = [tarballName];
 
-    // Hide message, show listing
-    document.getElementById('messageContainer').style.display = 'none';
     document.getElementById('directoryListing').classList.add('active');
-
-    // Update title to show it's extracted content
     document.getElementById('directoryTitle').textContent = `Extracted: ${tarballName}`;
-
-    // Change "Change Directory" button to "Back to Directory"
-    const changeDirBtn = document.getElementById('changeDirBtn');
-    changeDirBtn.textContent = '← Back to Directory';
-    changeDirBtn.onclick = async e => {
-      e.preventDefault();
-      await returnToNormalDirectory();
-    };
 
     // Push initial history state for the extracted root
     const state = {
@@ -1214,7 +791,84 @@ async function displayExtractedContents(tarballName) {
 }
 
 /**
- * Render OPFS directory contents (similar to renderDirectory but for OPFS)
+ * After extracting a must-gather tarball, find and navigate into the quay/registry directory.
+ * Searches the current extracted root and one level deep (for wrapper directories).
+ * Optionally walks further into a favoritePath relative to the quay/registry root.
+ *
+ * @param {string} favoritePath - Optional slash-separated relative path to navigate after reaching quay/registry.
+ */
+async function navigateToMustGatherRoot(favoritePath = '') {
+  // First, navigate back to the tarball extraction root so we always start from a known location
+  const tarballRoot = await getExtractedTarballRoot();
+  currentDirectoryHandle = tarballRoot;
+  pathStack = [extractedTarballName];
+
+  const topEntries = [];
+  for await (const entry of tarballRoot.values()) {
+    topEntries.push(entry);
+  }
+
+  // Check top level for quay/registry
+  let found = false;
+  const directMatch = topEntries.find(
+    e => e.kind === 'directory' && (e.name.includes('quay') || e.name.includes('registry'))
+  );
+  if (directMatch) {
+    await navigateIntoOPFS(directMatch);
+    found = true;
+  }
+
+  // Search one level deeper (tarball may have a single wrapper directory)
+  if (!found) {
+    for (const entry of topEntries) {
+      if (entry.kind !== 'directory') continue;
+      const subEntries = [];
+      for await (const sub of entry.values()) {
+        subEntries.push(sub);
+      }
+      const nestedMatch = subEntries.find(
+        e => e.kind === 'directory' && (e.name.includes('quay') || e.name.includes('registry'))
+      );
+      if (nestedMatch) {
+        await navigateIntoOPFS(entry);
+        await navigateIntoOPFS(nestedMatch);
+        found = true;
+        break;
+      }
+    }
+  }
+
+  if (!found) {
+    console.warn('No quay/registry directory found in extracted tarball');
+    await renderOPFSDirectory(tarballRoot);
+    return;
+  }
+
+  if (favoritePath) {
+    const segments = favoritePath.split('/').filter(Boolean);
+    for (let i = 0; i < segments.length; i++) {
+      const entries = [];
+      for await (const entry of currentDirectoryHandle.values()) {
+        entries.push(entry);
+      }
+      const dirMatch = entries.find(e => e.kind === 'directory' && e.name === segments[i]);
+      if (dirMatch) {
+        await navigateIntoOPFS(dirMatch);
+        continue;
+      }
+      if (i === segments.length - 1) {
+        const fileMatch = entries.find(e => e.kind === 'file' && e.name === segments[i]);
+        if (fileMatch) {
+          await openOPFSFile(fileMatch);
+        }
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * Render OPFS directory contents
  */
 async function renderOPFSDirectory(dirHandle, pushState = true) {
   try {
@@ -1348,33 +1002,13 @@ async function openOPFSFile(fileHandle) {
     const file = await fileHandle.getFile();
     const url = URL.createObjectURL(file);
 
-    // Store current state for back button
-    storeReturnData();
+    storeReturnData(fileHandle.name);
 
     // Navigate to file
     window.location.href = url;
   } catch (error) {
     showError(`Failed to open file: ${error.message}`);
   }
-}
-
-/**
- * Return to normal directory view from extracted view
- */
-async function returnToNormalDirectory() {
-  isExtractedView = false;
-  extractedTarballName = '';
-
-  // Restore "Change Directory" button
-  const changeDirBtn = document.getElementById('changeDirBtn');
-  changeDirBtn.textContent = '⚙️ Change Directory';
-  changeDirBtn.onclick = e => {
-    e.preventDefault();
-    chrome.runtime.openOptionsPage();
-  };
-
-  // Load normal directory
-  await autoLoadConfiguredDirectory();
 }
 
 /**

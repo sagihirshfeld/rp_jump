@@ -6,38 +6,29 @@ import { extractIds, fetchJson, fetchUrlLines, customQuote } from './utils.js';
 import { UsageError, UnexpectedStructureError } from './errors.js';
 
 /**
- * Process a ReportPortal URL and return the corresponding Magna logs URL.
- * @param {string} url - The ReportPortal UI URL to process.
- * @param {string} apiKey - ReportPortal API key.
- * @param {string} baseUrl - ReportPortal base URL.
- * @returns {Promise<string>} The URL to the Magna logs directory.
- * @throws {Error} If configuration is missing or processing fails.
+ * Resolve the test log directory on Magna from a ReportPortal URL.
+ * Shared logic used by both main() and findMustGatherTarballUrl().
+ *
+ * @returns {{ logsUrlRoot: string, clusterName: string, testName: string, targetFailedDirSuffix: string, safeTestName: string }}
  */
-async function main(url, apiKey, baseUrl) {
-  // Validate configuration
+async function resolveTestLogDirectory(url, apiKey, baseUrl) {
   if (!apiKey || !baseUrl) {
     throw new UsageError('Missing configuration. Please set RP_API_KEY and RP_BASE_URL');
   }
 
-  // Clean base URL
   const cleanBaseUrl = baseUrl.trim().replace(/^["']|["']$/g, '');
-
-  // Extract launch ID and test item ID from the URL
   const { launchId, testItemId } = extractIds(url);
 
-  // Build the URLs for the launch and item API (hardcoded to "ocs" project)
   const project = 'ocs';
   const rpProjectUrl = `${cleanBaseUrl}/api/v1/${project}`;
   const launchApi = `${rpProjectUrl}/launch?filter.eq.id=${launchId}`;
   const itemApi = `${rpProjectUrl}/item/${testItemId}`;
 
-  // Fetch the launch and item JSON data in parallel
   const [launchJson, itemJson] = await Promise.all([
     fetchJson(launchApi, apiKey),
     fetchJson(itemApi, apiKey),
   ]);
 
-  // Extract logs URL root and test name from the JSON data
   let logsUrlRoot, clusterName, testName;
   try {
     const description = launchJson.content[0].description;
@@ -50,7 +41,6 @@ async function main(url, apiKey, baseUrl) {
     );
   }
 
-  // Find the failed_testcase subdirectories
   const lines = await fetchUrlLines(logsUrlRoot, apiKey);
   const failedDirsSuffixes = lines
     .filter(line => line.includes('failed_testcase'))
@@ -64,7 +54,6 @@ async function main(url, apiKey, baseUrl) {
     throw new UnexpectedStructureError('No failed_testcase directories found on Magna.');
   }
 
-  // Find the failed_testcase directory that contains the test name
   let targetFailedDirSuffix = null;
   for (const suffix of failedDirsSuffixes) {
     const dirUrl = `${logsUrlRoot}/${suffix}`;
@@ -80,8 +69,21 @@ async function main(url, apiKey, baseUrl) {
     );
   }
 
-  // Encode test name only, leave slashes and brackets unencoded (Magna expects them)
   const safeTestName = customQuote(`${testName}_ocs_logs`, '/[]-_.~');
+
+  return { logsUrlRoot, clusterName, testName, targetFailedDirSuffix, safeTestName };
+}
+
+/**
+ * Process a ReportPortal URL and return the corresponding Magna logs URL.
+ * @param {string} url - The ReportPortal UI URL to process.
+ * @param {string} apiKey - ReportPortal API key.
+ * @param {string} baseUrl - ReportPortal base URL.
+ * @returns {Promise<string>} The URL to the Magna logs directory.
+ */
+async function main(url, apiKey, baseUrl) {
+  const { logsUrlRoot, clusterName, targetFailedDirSuffix, safeTestName } =
+    await resolveTestLogDirectory(url, apiKey, baseUrl);
 
   const targetDir = [
     logsUrlRoot.replace(/\/+$/, ''),
@@ -91,8 +93,7 @@ async function main(url, apiKey, baseUrl) {
     'ocs_must_gather',
   ].join('/');
 
-  // Find quay*/registry*
-  const targetDirLines = await fetchUrlLines(targetDir, apiKey);
+  const targetDirLines = await fetchUrlLines(targetDir);
   const prefixMatch = targetDirLines
     .map(line => {
       const match = line.match(/href="([^"]+)"/);
@@ -111,5 +112,46 @@ async function main(url, apiKey, baseUrl) {
   return finalUrl;
 }
 
-// Export main function for use in other modules
-export { main };
+/**
+ * Find the URL of the must-gather tarball on Magna for a given ReportPortal test.
+ * The tarball lives in the cluster directory alongside (or replacing) ocs_must_gather.
+ *
+ * @param {string} url - The ReportPortal UI URL to process.
+ * @param {string} apiKey - ReportPortal API key.
+ * @param {string} baseUrl - ReportPortal base URL.
+ * @returns {Promise<string>} The full URL of the must-gather tarball.
+ */
+async function findMustGatherTarballUrl(url, apiKey, baseUrl) {
+  const { logsUrlRoot, clusterName, targetFailedDirSuffix, safeTestName } =
+    await resolveTestLogDirectory(url, apiKey, baseUrl);
+
+  const clusterDir = [
+    logsUrlRoot.replace(/\/+$/, ''),
+    targetFailedDirSuffix.replace(/\/+$/, ''),
+    safeTestName,
+    clusterName,
+  ].join('/');
+
+  const dirLines = await fetchUrlLines(clusterDir);
+  const tarballHrefs = dirLines
+    .map(line => {
+      const match = line.match(/href="([^"]+)"/);
+      return match ? match[1] : null;
+    })
+    .filter(
+      href => href && (href.endsWith('.tar.gz') || href.endsWith('.tgz') || href.endsWith('.tar'))
+    );
+
+  if (tarballHrefs.length === 0) {
+    throw new UnexpectedStructureError(
+      'No must-gather tarball found in the expected location on Magna.'
+    );
+  }
+
+  const preferred = tarballHrefs.find(h => h.includes('must_gather') || h.includes('must-gather'));
+  const tarballSuffix = preferred || tarballHrefs[0];
+
+  return [clusterDir.replace(/\/+$/, ''), tarballSuffix.replace(/^\/+/, '')].join('/');
+}
+
+export { main, findMustGatherTarballUrl };

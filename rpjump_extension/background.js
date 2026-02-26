@@ -1,5 +1,5 @@
 // Import report_portal functions
-import { main } from './report_portal.js';
+import { findMustGatherTarballUrl } from './report_portal.js';
 import { UsageError, UnexpectedStructureError } from './errors.js';
 import { getMustGatherRootUrl } from './utils.js';
 import { addFavoriteFromUrl, getFavoritePath } from './favorites.js';
@@ -14,10 +14,9 @@ function alertInTab(tabId, message) {
 }
 
 /**
- * Process a ReportPortal URL using embedded JavaScript logic.
+ * Resolve the must-gather tarball URL from a ReportPortal page URL.
  */
-async function processRpJump(url) {
-  // Load configuration from storage
+async function processMustGatherTarball(url) {
   const config = await chrome.storage.local.get(['rpApiKey', 'rpBaseUrl']);
 
   if (!config.rpApiKey || !config.rpBaseUrl) {
@@ -26,8 +25,7 @@ async function processRpJump(url) {
     );
   }
 
-  // Call the embedded main function
-  return await main(url, config.rpApiKey, config.rpBaseUrl);
+  return await findMustGatherTarballUrl(url, config.rpApiKey, config.rpBaseUrl);
 }
 
 /**
@@ -41,6 +39,9 @@ async function handleError(error, tab) {
     console.warn('RP Jump error:', error);
   } else {
     console.error('RP Jump error:', error);
+  }
+  if (tab.url?.startsWith('blob:')) {
+    return;
   }
   alertInTab(tab.id, `❌ RP Jump failed:\n${error.message}`);
 }
@@ -63,18 +64,23 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const pageUrl = info.linkUrl || tab.url;
     let targetUrl;
 
-    if (info.menuItemId === 'rpjump-browse-local') {
-      // Open the directory browser page
-      chrome.tabs.create({ url: chrome.runtime.getURL('directory_browser.html') });
-      return;
-    }
+    const browserPageUrl = chrome.runtime.getURL('directory_browser.html');
+    const isDirectoryBrowser = tab.url?.startsWith(browserPageUrl);
+    const extensionOrigin = new URL(browserPageUrl).origin;
+    const isExtensionBlob = tab.url?.startsWith(`blob:${extensionOrigin}`);
 
     if (info.menuItemId === 'rpjump-add-favorite') {
-      await addFavoriteFromUrl(pageUrl, tab.id);
+      if (isExtensionBlob) {
+        await chrome.storage.session.set({ pendingAddFavorite: true });
+        await chrome.tabs.update(tab.id, { url: browserPageUrl });
+      } else if (isDirectoryBrowser) {
+        chrome.tabs.sendMessage(tab.id, { action: 'addFavorite' });
+      } else {
+        await addFavoriteFromUrl(pageUrl, tab.id);
+      }
       return;
     }
 
-    // Are we in a must-gather sub-path?
     const isMustGatherSubPath = pageUrl?.includes('must-gather');
 
     // Open favorite
@@ -85,24 +91,61 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         console.warn('Favorite not found:', favTitle);
         return;
       }
+      if (isExtensionBlob) {
+        await chrome.storage.session.set({
+          pendingNavigate: { type: 'favorite', favoritePath: relativePathSuffix },
+        });
+        await chrome.tabs.update(tab.id, { url: browserPageUrl });
+        return;
+      }
+      if (isDirectoryBrowser) {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'navigateToFavorite',
+          favoritePath: relativePathSuffix,
+        });
+        return;
+      }
       if (isMustGatherSubPath) {
         targetUrl = getMustGatherRootUrl(pageUrl) + '/' + relativePathSuffix;
       } else {
-        targetUrl = (await processRpJump(pageUrl)) + '/' + relativePathSuffix;
+        const tarballUrl = await processMustGatherTarball(pageUrl);
+        const params = new URLSearchParams({
+          tarballUrl,
+          mustGatherRoot: 'true',
+          favoritePath: relativePathSuffix,
+        });
+        chrome.tabs.create({ url: `${browserPageUrl}?${params}` });
+        return;
       }
     }
 
     // Open must-gather root
     if (info.menuItemId === 'rpjump-root') {
+      if (isExtensionBlob) {
+        await chrome.storage.session.set({
+          pendingNavigate: { type: 'mustGatherRoot' },
+        });
+        await chrome.tabs.update(tab.id, { url: browserPageUrl });
+        return;
+      }
+      if (isDirectoryBrowser) {
+        chrome.tabs.sendMessage(tab.id, { action: 'navigateToMustGatherRoot' });
+        return;
+      }
       if (isMustGatherSubPath) {
         targetUrl = getMustGatherRootUrl(pageUrl);
       } else {
-        targetUrl = await processRpJump(pageUrl);
+        const tarballUrl = await processMustGatherTarball(pageUrl);
+        const params = new URLSearchParams({
+          tarballUrl,
+          mustGatherRoot: 'true',
+        });
+        chrome.tabs.create({ url: `${browserPageUrl}?${params}` });
+        return;
       }
     }
 
     if (isMustGatherSubPath) {
-      // Change the current tab to the target URL
       chrome.tabs.update(tab.id, { url: targetUrl });
     } else {
       chrome.tabs.create({ url: targetUrl });
